@@ -66,7 +66,7 @@ client.train(
     resources_per_worker={
         "gpu": 1,
         "cpu": 2,
-        "memory": "8Gi",
+        "memory": "4Gi",
     },  # remove the gpu key if you don't want to attach gpus to the pods
 )
 # check the logs of the job

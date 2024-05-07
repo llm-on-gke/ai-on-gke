@@ -10,24 +10,32 @@ spec:
       restartPolicy: OnFailure
       template:
         spec:
-          containers:
+           nodeSelector:
+             cloud.google.com/gke-accelerator: nvidia-l4
+           containers:
             - name: pytorch
               image: us-east1-docker.pkg.dev/rick-vertex-ai/gke-llm/kubeflow-finetune:latest
               imagePullPolicy: Always
               env:
-                - name: hf_model
-                  value: 
-                - name: hf_dataset
-                  value: 1g
+                - name: model_uri
+                  value: hf://TinyLlama/TinyLlama-1.1B-Chat-v1.0
+                - name: dataset_repo
+                  value: imdatta0/ultrachat_1k
               command:
                 - "python3"
                 - "/app/fine-tune.py"
+              resources:
+                limits:
+                  nvidia.com/gpu: 1
+             
              
     Worker:
       replicas: 1
       restartPolicy: OnFailure
       template:
         spec:
+          nodeSelector:
+             cloud.google.com/gke-accelerator: nvidia-l4
           containers:
             - name: pytorch
               image: us-east1-docker.pkg.dev/rick-vertex-ai/gke-llm/kubeflow-finetune:latest
@@ -35,4 +43,7 @@ spec:
               command:
                 - "python3"
                 - "/app/fine-tune.py"
+              resources:
+                limits:
+                  nvidia.com/gpu: 1
             
