@@ -28,6 +28,7 @@ const (
 	GKETPUNodeSelector         = "cloud.google.com/gke-tpu-topology"
 	GKEAcceleratorNodeSelector = "cloud.google.com/gke-tpu-accelerator"
 	GKENodePoolNameLabel       = "cloud.google.com/gke-nodepool"
+	ICIResiliencyLabel         = "cloud.google.com/gke-tpu-ici-resiliency"
 
 	// Supported accelerator types
 	V4PodSliceAccelerator  = "tpu-v4-podslice"
@@ -242,7 +243,11 @@ func (g *GKE) nodePoolForPod(name string, p *corev1.Pod) (*containerv1beta1.Node
 
 	for k, v := range p.Spec.NodeSelector {
 		// Don't copy GCP/Google labels onto the node.
-		if !strings.HasPrefix(k, gcpLabelPrefix) && !strings.HasPrefix(k, googleLabelPrefix) {
+		if (!strings.HasPrefix(k, gcpLabelPrefix) && !strings.HasPrefix(k, googleLabelPrefix)) ||
+			// Special label used for disabling ICI resiliency, by default if not specified TPU slice
+			// is created in the ICI resilient mode. To disable the ICI resilient, workload needs
+			// to use node selector or affinity cloud.google.com/gke-tpu-ici-resiliency=false.
+			(k == ICIResiliencyLabel) {
 			labels[k] = v
 		}
 	}
@@ -271,27 +276,30 @@ func (g *GKE) nodePoolForPod(name string, p *corev1.Pod) (*containerv1beta1.Node
 	}
 
 	var reservation *containerv1beta1.ReservationAffinity
-	if resName, ok := p.Spec.NodeSelector["cloud.google.com/reservation-name"]; ok {
-		reservation = &containerv1beta1.ReservationAffinity{
-			ConsumeReservationType: "SPECIFIC_RESERVATION",
-			Key:                    "compute.googleapis.com/reservation-name",
-			Values: []string{
-				resName,
-			},
-		}
-	}
-
 	var taints []*containerv1beta1.NodeTaint
+	var spot bool
 
-	spot := p.Spec.NodeSelector["cloud.google.com/gke-spot"] == "true"
-	if spot {
-		// Add the taint that NAP would add.
-		// https://cloud.google.com/kubernetes-engine/docs/concepts/spot-vms#spotvms-nap
-		taints = append(taints, &containerv1beta1.NodeTaint{
-			Key:    "cloud.google.com/gke-spot",
-			Value:  "true",
-			Effect: "NO_SCHEDULE",
-		})
+	if !g.ClusterContext.ForceOnDemand {
+		if resName, ok := p.Spec.NodeSelector["cloud.google.com/reservation-name"]; ok {
+			reservation = &containerv1beta1.ReservationAffinity{
+				ConsumeReservationType: "SPECIFIC_RESERVATION",
+				Key:                    "compute.googleapis.com/reservation-name",
+				Values: []string{
+					resName,
+				},
+			}
+		}
+
+		spot = p.Spec.NodeSelector["cloud.google.com/gke-spot"] == "true"
+		if spot {
+			// Add the taint that NAP would add.
+			// https://cloud.google.com/kubernetes-engine/docs/concepts/spot-vms#spotvms-nap
+			taints = append(taints, &containerv1beta1.NodeTaint{
+				Key:    "cloud.google.com/gke-spot",
+				Value:  "true",
+				Effect: "NO_SCHEDULE",
+			})
+		}
 	}
 
 	var secondaryDisks []*containerv1beta1.SecondaryBootDisk
@@ -331,7 +339,7 @@ func (g *GKE) nodePoolForPod(name string, p *corev1.Pod) (*containerv1beta1.Node
 		},
 		Management: &containerv1beta1.NodeManagement{
 			AutoRepair:  true,
-			AutoUpgrade: true,
+			AutoUpgrade: false,
 		},
 		UpgradeSettings: &containerv1beta1.UpgradeSettings{
 			MaxSurge: 1,
