@@ -1,0 +1,38 @@
+apiVersion: "kubeflow.org/v1"
+kind: PyTorchJob
+metadata:
+  name: pytorch-fine-tune
+  namespace: kubeflow
+spec:
+  pytorchReplicaSpecs:
+    Master:
+      replicas: 1
+      restartPolicy: OnFailure
+      template:
+        spec:
+          containers:
+            - name: pytorch
+              image: us-east1-docker.pkg.dev/rick-vertex-ai/gke-llm/kubeflow-finetune:latest
+              imagePullPolicy: Always
+              env:
+                - name: hf_model
+                  value: 
+                - name: hf_dataset
+                  value: 1g
+              command:
+                - "python3"
+                - "/app/fine-tune.py"
+             
+    Worker:
+      replicas: 1
+      restartPolicy: OnFailure
+      template:
+        spec:
+          containers:
+            - name: pytorch
+              image: us-east1-docker.pkg.dev/rick-vertex-ai/gke-llm/kubeflow-finetune:latest
+              imagePullPolicy: Always
+              command:
+                - "python3"
+                - "/app/fine-tune.py"
+            

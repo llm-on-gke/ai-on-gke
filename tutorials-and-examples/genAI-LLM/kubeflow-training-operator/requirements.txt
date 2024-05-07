@@ -1,0 +1,1 @@
+kubeflow-training[huggingface]
