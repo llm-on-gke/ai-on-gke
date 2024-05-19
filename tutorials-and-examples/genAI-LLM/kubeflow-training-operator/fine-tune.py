@@ -1,6 +1,6 @@
 # import the libraries
 from kubeflow.training.api.training_client import TrainingClient
-from kubeflow.storage_initializer.s3 import S3DatasetParams
+#from kubeflow.storage_initializer.s3 import S3DatasetParams
 from kubeflow.storage_initializer.hugging_face import (
     HuggingFaceModelParams,
     HuggingFaceTrainerParams,
