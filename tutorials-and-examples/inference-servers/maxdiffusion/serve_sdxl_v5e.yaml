@@ -45,10 +45,10 @@ metadata:
   labels:
     app: max-diffusion-server
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   ports:
     - port: 8000
-      targetPort: http
+      targetPort: 8000
       name: http-max-diffusion-server
       protocol: TCP
   selector:
