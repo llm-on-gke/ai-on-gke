@@ -15,6 +15,7 @@ spec:
       nodeSelector:
         cloud.google.com/gke-tpu-topology: 1x1 #  target topology
         cloud.google.com/gke-tpu-accelerator: tpu-v5-lite-podslice
+        #cloud.google.com/gke-spot: "true"
       volumes:
        - name: dshm
          emptyDir:
