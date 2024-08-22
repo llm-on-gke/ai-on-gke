@@ -1,0 +1,41 @@
+apiVersion: v1
+kind: PodTemplate
+metadata:
+  name: dws-template
+  namespace: default
+  labels:
+    cloud.google.com/apply-warden-policies: "true"
+template:
+  spec:
+    nodeSelector:
+        cloud.google.com/gke-nodepool: NODE-POOL-NAME
+    tolerations:
+        - key: "nvidia.com/gpu"
+          operator: "Exists"
+          effect: "NoSchedule"
+    containers:
+        - name: pi
+          image: perl
+          command: ["/bin/sh"]
+          resources:
+            limits:
+              cpu: "700m"
+              nvidia.com/gpu: 2
+            requests:
+              cpu: "700m"
+              nvidia.com/gpu: 2
+    restartPolicy: Never
+---
+apiVersion: autoscaling.x-k8s.io/v1beta1
+kind: ProvisioningRequest
+metadata:
+  name: dws-prov-request
+  namespace: default
+spec:
+  provisioningClassName: queued-provisioning.gke.io
+  parameters:
+    maxRunDurationSeconds: "1000"
+  podSets:
+  - count: 1
+    podTemplateRef:
+      name: dws-template
