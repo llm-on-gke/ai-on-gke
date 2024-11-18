@@ -48,6 +48,33 @@ def root():
   )
   return response
 
+@app.get("/healthcheck")
+async def healthcheck():
+  try:
+    request = jetstream_pb2.HealthCheckRequest()
+
+    options = [("grpc.keepalive_timeout_ms", 10000)]
+    async with grpc.aio.insecure_channel("127.0.0.1:9000", options=options) as channel:
+      stub = jetstream_pb2_grpc.OrchestratorStub(channel)
+      response = stub.HealthCheck(request)
+      response = await response
+
+      if response.is_live == False:
+        raise fastapi.HTTPException(status_code=500, detail="Healthcheck failed, is_live = False")
+
+      is_live = {"is_live": response.is_live}
+      response = {"response": is_live}
+
+      response = fastapi.Response(
+          content=json.dumps(response, indent=4), media_type="application/json"
+      )
+      return response
+
+  except Exception as e:
+    logging.exception("Exception in healthcheck")
+    logging.exception(e)
+    raise fastapi.HTTPException(status_code=500, detail="Healthcheck failed")
+
 
 @app.post("/generate", status_code=200)
 async def generate(request: GenerateRequest):
@@ -55,7 +82,7 @@ async def generate(request: GenerateRequest):
   try:
     request = jetstream_pb2.DecodeRequest(
         session_cache=request.session_cache,
-        additional_text=request.prompt,
+        text_content=jetstream_pb2.DecodeRequest.TextContent(text=request.prompt),
         priority=request.priority,
         max_tokens=request.max_tokens,
     )
@@ -82,6 +109,6 @@ async def generate_prompt(
     stub = jetstream_pb2_grpc.OrchestratorStub(channel)
     response = stub.Decode(request)
     output = ""
-    async for token_list in response:
-      output += str(token_list.response[0])
+    async for r in response:
+      output += str(r.stream_content.samples[0].text)
     return output

@@ -28,7 +28,15 @@ const (
 	GKETPUNodeSelector         = "cloud.google.com/gke-tpu-topology"
 	GKEAcceleratorNodeSelector = "cloud.google.com/gke-tpu-accelerator"
 	GKENodePoolNameLabel       = "cloud.google.com/gke-nodepool"
-	ICIResiliencyLabel         = "cloud.google.com/gke-tpu-ici-resiliency"
+
+	// ICIResiliencyLabel is used for disabling ICI resiliency, by default if not specified TPU slice
+	// is created in the ICI resilient mode. To disable the ICI resilient, workload needs
+	// to use node selector or affinity cloud.google.com/gke-tpu-ici-resiliency=false.
+	ICIResiliencyLabel = "cloud.google.com/gke-tpu-ici-resiliency"
+
+	// LocationHintLabel is used for passing in a desired borg cell the node pool MIG should be
+	// provisioned in.
+	LocationHintLabel = "cloud.google.com/gke-location-hint"
 
 	// Supported accelerator types
 	V4PodSliceAccelerator  = "tpu-v4-podslice"
@@ -114,7 +122,11 @@ func (g *GKE) EnsureNodePoolForPod(p *corev1.Pod, why string) error {
 		defer g.inProgressCreatesJobKey.Delete(jobKey)
 	}
 
-	g.Recorder.Eventf(p, corev1.EventTypeNormal, EventNodePoolCreationStarted, "Starting creation of Node Pool %s (size = %v) because %s", name, np.InitialNodeCount, why)
+	// Get JobSet this pod is part of from the pod labels and log it.
+	jobSetName := p.Labels[jobset.JobSetNameKey]
+	g.Recorder.Eventf(p, corev1.EventTypeNormal, EventNodePoolCreationStarted, "Starting creation of Node Pool %s (size = %v) for JobSet %s because %s", name, np.InitialNodeCount, jobSetName, why)
+	log.Info(fmt.Sprintf("creating node pool %s for jobset %s", np.Name, jobSetName))
+
 	call := g.Service.Projects.Locations.Clusters.NodePools.Create(g.ClusterContext.ClusterName(), req)
 	op, err := call.Do()
 	if err != nil {
@@ -142,13 +154,22 @@ func (g *GKE) ListNodePools() ([]NodePoolRef, error) {
 	}
 
 	for _, np := range resp.NodePools {
+		jsName, exists := np.Config.Labels[LabelJobSetName]
+		if !exists {
+			jsName = np.Config.Labels[LabelProvisionerNodepoolID]
+		}
+		jsNamespace, exists := np.Config.Labels[LabelJobSetNamespace]
+		if !exists {
+			jsNamespace = "default"
+		}
+
 		refs = append(refs, NodePoolRef{
 			Name:    np.Name,
 			Error:   np.Status == "ERROR",
 			Message: np.StatusMessage,
 			CreatedForJobSet: types.NamespacedName{
-				Name:      np.Config.Labels[LabelJobSetName],
-				Namespace: np.Config.Labels[LabelJobSetNamespace],
+				Name:      jsName,
+				Namespace: jsNamespace,
 			},
 		})
 	}
@@ -241,14 +262,35 @@ func (g *GKE) nodePoolForPod(name string, p *corev1.Pod) (*containerv1beta1.Node
 		LabelJobSetNamespace: p.Namespace,
 	}
 
-	for k, v := range p.Spec.NodeSelector {
-		// Don't copy GCP/Google labels onto the node.
-		if (!strings.HasPrefix(k, gcpLabelPrefix) && !strings.HasPrefix(k, googleLabelPrefix)) ||
-			// Special label used for disabling ICI resiliency, by default if not specified TPU slice
-			// is created in the ICI resilient mode. To disable the ICI resilient, workload needs
-			// to use node selector or affinity cloud.google.com/gke-tpu-ici-resiliency=false.
-			(k == ICIResiliencyLabel) {
-			labels[k] = v
+	// Copy configured labels from the Pod to the Node.
+	for _, key := range g.ClusterContext.PodToNodeLabels {
+		if val, ok := p.Labels[key]; ok {
+			labels[key] = val
+		}
+	}
+
+	// Copy labels specified by annotation to the Node.
+	for _, key := range strings.Split(getAnnotation(p, AnnotationCopyLabels), ",") {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+		if val, ok := p.Labels[key]; ok {
+			labels[key] = val
+		}
+	}
+
+	for labelKey, labelValue := range p.Spec.NodeSelector {
+		switch labelKey {
+		case ICIResiliencyLabel:
+			labels[labelKey] = labelValue
+		case LocationHintLabel:
+			labels[labelKey] = labelValue
+		default:
+			// Don't copy GCP/Google labels onto the node.
+			if !strings.HasPrefix(labelKey, gcpLabelPrefix) && !strings.HasPrefix(labelKey, googleLabelPrefix) {
+				labels[labelKey] = labelValue
+			}
 		}
 	}
 
@@ -460,4 +502,11 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func getAnnotation(p *corev1.Pod, key string) string {
+	if p.Annotations == nil {
+		return ""
+	}
+	return p.Annotations[key]
 }

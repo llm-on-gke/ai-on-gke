@@ -36,7 +36,7 @@ head:
   # If enableInTreeAutoscaling is true, the autoscaler sidecar will be added to the Ray head pod.
   # Ray autoscaler integration is supported only for Ray versions >= 1.11.0
   # Ray autoscaler integration is Beta with KubeRay >= 0.3.0 and Ray >= 2.0.0.
-  # enableInTreeAutoscaling: true
+  enableInTreeAutoscaling: true
   # autoscalerOptions is an OPTIONAL field specifying configuration overrides for the Ray autoscaler.
   # The example configuration shown below below represents the DEFAULT values.
   # autoscalerOptions:
@@ -95,17 +95,17 @@ head:
       # Ray recommends at least 8G memory for production workloads.
       memory: "8G"
       # Sum of ephemeral storage requests must be max 10Gi on Autopilot default class.
-      # This includes, ray-head, gcsfuse-sidecar, and fluent-bit.
-      ephemeral-storage: 4Gi
+      # This includes, ray-head, gcsfuse-sidecar, fluent-bit, and ray Autoscaler sidecar which requests 1Gi by default.
+      ephemeral-storage: 3Gi
     requests:
       cpu: "4"
       memory: "8G"
-      ephemeral-storage: 4Gi
+      ephemeral-storage: 3Gi
   annotations:
     gke-gcsfuse/volumes: "true"
     gke-gcsfuse/cpu-limit: "1"
     gke-gcsfuse/memory-limit: 2Gi
-    gke-gcsfuse/ephemeral-storage-limit: 4Gi
+    gke-gcsfuse/ephemeral-storage-limit: 3Gi
   nodeSelector:
     iam.gke.io/gke-metadata-server-enabled: "true"
   tolerations: []
@@ -114,11 +114,6 @@ head:
   securityContext:
     ${indent(4, chomp(yamlencode(security_context)))}
   volumes:
-    - name: ray-logs
-      emptyDir: {}
-    - name: fluentbit-config
-      configMap:
-        name: fluentbit-config
     - name: gcs-fuse-csi-ephemeral
       csi:
         driver: gcsfuse.csi.storage.gke.io
@@ -132,40 +127,20 @@ head:
         optional: true
   # Ray writes logs to /tmp/ray/session_latests/logs
   volumeMounts:
-    - mountPath: /tmp/ray
-      name: ray-logs
     - name: gcs-fuse-csi-ephemeral
       mountPath: /data
     - name: secret-volume
       mountPath: /etc/secret-volume
       readOnly: true
-  # sidecarContainers specifies additional containers to attach to the Ray pod.
-  # Follows standard K8s container spec.
-  sidecarContainers:
-    - name: fluentbit
-      image: fluent/fluent-bit:1.9.6
-      # These resource requests for Fluent Bit should be sufficient in production.
-      resources:
-        requests:
-          cpu: 100m
-          memory: 128Mi
-          ephemeral-storage: 2Gi
-        limits:
-          cpu: 100m
-          memory: 128Mi
-          ephemeral-storage: 2Gi
-      volumeMounts:
-      - mountPath: /tmp/ray
-        name: ray-logs
-      - mountPath: /fluent-bit/etc/
-        name: fluentbit-config
 
 worker:
   # If you want to disable the default workergroup
   # uncomment the line below
   # disabled: true
   groupName: workerGroup
-  replicas: 1
+  replicas: 0
+  minReplicas: 0
+  maxReplicas: 5
   type: worker
   labels:
     cloud.google.com/gke-ray-node-type: worker
@@ -209,11 +184,6 @@ worker:
   securityContext:
     ${indent(4, chomp(yamlencode(security_context)))}
   volumes:
-    - name: ray-logs
-      emptyDir: {}
-    - name: fluentbit-config
-      configMap:
-        name: fluentbit-config
     - name: gcs-fuse-csi-ephemeral
       csi:
         driver: gcsfuse.csi.storage.gke.io
@@ -227,33 +197,11 @@ worker:
         optional: true
   # Ray writes logs to /tmp/ray/session_latests/logs
   volumeMounts:
-    - mountPath: /tmp/ray
-      name: ray-logs
     - name: gcs-fuse-csi-ephemeral
       mountPath: /data
     - name: secret-volume
       mountPath: /etc/secret-volume
       readOnly: true
-  # sidecarContainers specifies additional containers to attach to the Ray pod.
-  # Follows standard K8s container spec.
-  sidecarContainers:
-    - name: fluentbit
-      image: fluent/fluent-bit:1.9.6
-      # These resource requests for Fluent Bit should be sufficient in production.
-      resources:
-        requests:
-          cpu: 100m
-          memory: 128Mi
-          ephemeral-storage: 2Gi
-        limits:
-          cpu: 100m
-          memory: 128Mi
-          ephemeral-storage: 4Gi
-      volumeMounts:
-        - mountPath: /tmp/ray
-          name: ray-logs
-        - mountPath: /fluent-bit/etc/
-          name: fluentbit-config
 
 # The map's key is used as the groupName.
 # For example, key:small-group in the map below

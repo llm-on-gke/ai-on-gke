@@ -58,6 +58,17 @@ variable "gpu_count" {
   }
 }
 
+variable "swap_space" {
+  description = "The size (GiB) of CPU memory per GPU to use as swap space. See https://github.com/vllm-project/vllm/blob/main/vllm/entrypoints/llm.py#L65 for more details."
+  type        = number
+  nullable    = false
+  default     = 4
+  validation {
+    condition     = var.swap_space >= 0
+    error_message = "swap space must be greater than or equal to 0."
+  }
+}
+
 variable "ksa" {
   description = "Kubernetes Service Account used for workload."
   type        = string
@@ -94,4 +105,38 @@ variable "hugging_face_secret_version" {
 variable "project_id" {
   description = "Project id of existing or created project."
   type        = string
+}
+
+variable "hpa_type" {
+  description = "How the vllm workload should be scaled."
+  type        = string
+  default     = null
+  nullable    = true
+  validation {
+    condition     = var.hpa_type == null ? true : length(regexall("vllm.*", var.hpa_type)) > 0
+    error_message = "Allows values for hpa_type are {null, or vLLM metrics (e.g., \"vllm:num_requests_waiting\", \"vllm:gpu_cache_usage_perc\")}"
+  }
+}
+
+variable "hpa_min_replicas" {
+  description = "Minimum number of HPA replicas."
+  type        = number
+  default     = 1
+  nullable    = false
+}
+
+variable "hpa_max_replicas" {
+  description = "Maximum number of HPA replicas."
+  type        = number
+  default     = 5
+  nullable    = false
+}
+
+# TODO: combine hpa variables into a single object (so that they can be
+# validated together)
+variable "hpa_averagevalue_target" {
+  description = "AverageValue target for the `hpa_type` metric. Must be set if `hpa_type` is not null."
+  type        = number
+  default     = null
+  nullable    = true
 }
