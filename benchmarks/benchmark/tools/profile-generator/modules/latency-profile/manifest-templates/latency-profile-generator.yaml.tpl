@@ -15,6 +15,10 @@ spec:
         name: latency-profile-generator
     spec:
       serviceAccountName: ${latency_profile_kubernetes_service_account}
+      tolerations:
+               - key: "components.gke.io/gke-managed-components"
+                 operator: "Exists"
+                 effect: "NoSchedule"
       containers:
         - name: latency-profile-generator
           image: ${artifact_registry}/latency-profile:latest
@@ -61,10 +65,9 @@ spec:
                   name: hf-token
                   key: HF_TOKEN
 %{ endfor ~}
-%{ for hf_token in k8s_hf_secret_list ~}
+
             - name: HF_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: hf-token
+                  name: ${k8s_hf_secret}
                   key: HF_TOKEN
-%{ endfor ~}

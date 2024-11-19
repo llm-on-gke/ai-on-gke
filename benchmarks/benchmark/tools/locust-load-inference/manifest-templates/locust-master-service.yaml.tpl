@@ -42,4 +42,4 @@ spec:
       name: loc-master-web
   selector:
     app: locust-master
-  type: LoadBalancer
+  type: ClusterIP

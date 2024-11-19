@@ -17,4 +17,4 @@ spec:
 %{ endfor ~}
   selector:
     app: locust-runner
-  type: LoadBalancer
+  type: ClusterIP

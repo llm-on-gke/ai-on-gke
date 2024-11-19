@@ -62,7 +62,7 @@ resource "kubernetes_manifest" "latency-profile-generator" {
     benchmark_time_seconds                     = var.benchmark_time_seconds
     request_rates                              = join(",", [for number in var.request_rates : tostring(number)])
     hugging_face_token_secret_list             = local.hugging_face_token_secret == null ? [] : [local.hugging_face_token_secret]
-    k8s_hf_secret_list                         = var.k8s_hf_secret == null ? [] : [var.k8s_hf_secret]
+    k8s_hf_secret                        = var.k8s_hf_secret
     output_bucket                              = var.gcs_output.bucket
     output_bucket_filepath                     = var.gcs_output.filepath
     scrape_server_metrics                      = var.scrape_server_metrics

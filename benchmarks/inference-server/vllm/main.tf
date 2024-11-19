@@ -60,6 +60,7 @@ resource "kubernetes_manifest" "default" {
     swap_space                     = var.swap_space
     ksa                            = var.ksa
     hugging_face_token_secret_list = local.hugging_face_token_secret == null ? [] : [local.hugging_face_token_secret]
+    hugging_face_secret=var.hugging_face_secret
   }))
   timeouts {
     create = "60m"

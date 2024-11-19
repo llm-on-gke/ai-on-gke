@@ -136,7 +136,7 @@ variable "models" {
   description = "A list of comma separated models to benchmark."
   type        = string
   nullable    = false
-  default     = "tiiuae/falcon-7b"
+  default     = "mistralai/Mistral-7B-Instruct-v0.3"
 }
 
 variable "gcs_output" {
